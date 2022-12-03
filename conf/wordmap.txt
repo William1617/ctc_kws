@@ -1,0 +1,13 @@
+zero zero
+eight eight
+five five
+four four
+off off
+left left
+nine nine
+right right
+seven seven
+six six
+stop stop
+three three
+up up

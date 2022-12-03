@@ -1,0 +1,15 @@
+ <eps> 0
+ ' 1
+ zero 2
+ eight 3
+ five 4
+ four 5
+ off 6
+ left 7
+ nine 8
+ right 9
+ seven 10
+ six 11
+ stop 12
+ three 13
+ up 14
