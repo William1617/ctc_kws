@@ -4,12 +4,10 @@ import os
 from torch.utils import data
 import torchaudio.compliance.kaldi as kaldi
 import torchaudio
-from Processor import TextTransform
 import torch
 
 class audiodataset(data.Dataset):
     def __init__(self,data_dir):
-        self.transformer=TextTransform()
         self.wave_info=self.getaudioinfo(data_dir)
 
     def __getitem__(self, index) :
