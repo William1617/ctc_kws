@@ -1,13 +1,10 @@
-from tkinter.messagebox import NO
+
 import torch
 import torchaudio
 from torch import nn, autograd, utils
 import torchaudio.transforms as T
 import numpy as np
-import warnings
 import torchaudio.compliance.kaldi as kaldi
-warnings.simplefilter("ignore", UserWarning)
-index_map = {}
 class TextTransform:
     """Maps characters to integers and vice versa"""
     def __init__(self):
