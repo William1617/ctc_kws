@@ -56,6 +56,7 @@ def train(train_loader,dev_loader,out_dir,vocab_size):
             loss.backward()
             loss = float(loss.data) * len(xlen) # batch size
             losses.append(loss)
+            lr = optimizer.param_groups[0]['lr']
             
             optimizer.step()
 
