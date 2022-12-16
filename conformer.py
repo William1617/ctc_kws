@@ -92,7 +92,7 @@ class conformermodel(nn.Module):
       #For training, mask_pad is required
         xs=self.subsample(xs)
         if(self.train_flag):
-            mask=make_pad_mask(xs_len,xs.size(1)).unsqueeze(1)
+            mask=~make_pad_mask(xs_len,xs.size(1)).unsqueeze(1)
         else:
             mask=torch.ones((0, 0, 0), dtype=torch.bool)
 
