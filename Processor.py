@@ -39,19 +39,10 @@ class TextTransform:
 
 text_transform=TextTransform()
 
-# Out length after subsamplng4
-def cal_length(audio_length):
-    k=audio_length%4
-    if(k<3):
-        out_length=int(audio_length/4)-1
-    else:
-        out_length=int(audio_length/4)
-    return out_length
-
 def data_processing(data):
     mfccs = []
     labels = []
-    output_lengths = []
+    audio_lengths = []
     label_lengths = []
 
     for (waveform, sample_rate, utterance) in data:
@@ -64,13 +55,13 @@ def data_processing(data):
         label = torch.Tensor(text_transform.text_to_int(utterance.lower()))
         labels.append(label)
     # Audio length after subsampling4
-        output_lengths.append(cal_length(mfcc.shape[0]))
+        audio_lengths.append(mfcc.shape[0])
         label_lengths.append(len(label))
 
     mfccs = nn.utils.rnn.pad_sequence(mfccs, batch_first=True).unsqueeze(1).transpose(2, 3)
     labels = nn.utils.rnn.pad_sequence(labels, batch_first=True)
     output_lengths=torch.IntTensor(output_lengths)
-    return mfccs, labels, output_lengths, label_lengths
+    return mfccs, labels, audio_lengths, label_lengths
 
 def calcmvn(feats,cmvn_mean,cmvn_var):
     m,n=feats.size()
