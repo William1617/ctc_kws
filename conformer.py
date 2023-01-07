@@ -50,7 +50,7 @@ class ConformerEncoderLayer(nn.Module):
 
         x = residual + self.ff_scale * self.dropout(self.feed_forward(x))
         x = self.norm_final(x)
-        return x
+        return x,mask
 
 
 class conformermodel(nn.Module):
@@ -90,16 +90,15 @@ class conformermodel(nn.Module):
     ) -> torch.Tensor:
       #  xs=self.cmvn(xs)
       #For training, mask_pad is required
-        xs=self.subsample(xs)
         if(self.train_flag):
             mask=~make_pad_mask(xs_len,xs.size(1)).unsqueeze(1)
         else:
             mask=torch.ones((0, 0, 0), dtype=torch.bool)
-
+        xs,mask=self.subsample(xs,mask)
         for layer in self.encoders:
-            xs=layer(xs,mask)
+            xs,mask=layer(xs,mask)
         xs=self.linear(xs)
-        return xs
+        return xs,mask
 
 if __name__=='__main__':
     conformer=conformermodel(80,45,3,100,2,9,train_flag=True)
