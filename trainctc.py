@@ -47,9 +47,9 @@ def train(train_loader,dev_loader,out_dir,vocab_size):
             y = Variable(torch.IntTensor(ys)) 
             model.train()
             optimizer.zero_grad()
-            out = model(x,x_len)
-          
-            xl = Variable(torch.IntTensor(xlen))
+            out,out_mask = model(x,x_len)
+        
+            xl = Variable(out_mask.squeeze(1).sum(1))
             yl = Variable(torch.IntTensor(ylen))
             out = F.log_softmax(out, dim=2)
             loss = criterion(out.transpose(0,1).contiguous(), y, xl, yl)
@@ -72,8 +72,8 @@ def train(train_loader,dev_loader,out_dir,vocab_size):
                 ys = np.hstack([ys[i, :j] for i, j in enumerate(ylen)])
                 y = Variable(torch.IntTensor(ys))
                 model.eval()
-                out = model(x,x_len)
-                xl = Variable(xlen)
+                out,out_mask = model(x,x_len)
+                xl = Variable(out_mask.squeeze(1).sum(1))
                 yl = Variable(torch.IntTensor(ylen))
                 out = F.log_softmax(out, dim=2)
                 val_loss = criterion(out.transpose(0,1).contiguous(), y, xl, yl)
