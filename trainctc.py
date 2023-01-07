@@ -9,6 +9,7 @@ from torch.utils import data
 from torch.autograd import Variable
 import torch.nn.functional as F
 from conformer import conformermodel
+from transformer import transformer
 from audioloader import audiodataset
 from Processor import data_processing
 
