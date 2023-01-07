@@ -206,7 +206,7 @@ class Conv2dSubsampling4(nn.Module):
         x = self.conv(x)
         b, c, t, f = x.size()
         x = self.out(x.transpose(1, 2).contiguous().view(b,t,c * f)) #(b,t,odim)
-        return x
+        return x,mask[:,:,2::2][:,:,2::2]
 
 
 class GlobalCMVN(torch.nn.Module):
