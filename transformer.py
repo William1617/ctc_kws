@@ -55,7 +55,7 @@ class transformer(nn.Module):
         self.linear=nn.Linear(out_size,vocab_size)
         self.trainflag=trainflag
         #  self.cmvn=GlobalCMVN(mean,istd,True)
-    def forward(self,x, xs_len:torch.Tensor = torch.ones((0),dtype=torch.int)):
+    def forward(self,x, xs_len:torch.Tensor = torch.ones((0),dtype=torch.int))-> Tuple[torch.Tensor, torch.Tensor]:
         if(self.trainflag):
             mask=~make_pad_mask(xs_len,x.size(1)).unsqueeze(1)
         else:
