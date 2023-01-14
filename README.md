@@ -1,3 +1,3 @@
-# kws_conformer
+# ctc_kws
 
-Keyword spotting using ctcloss and common e2e model
+Keyword spotting using ctcloss and common e2e models
