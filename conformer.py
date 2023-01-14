@@ -37,7 +37,7 @@ class ConformerEncoderLayer(nn.Module):
         self,
         x: torch.Tensor,
         mask: torch.Tensor,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         residual = x
         x_att = self.self_attn(
             x, x, x,mask)
@@ -87,7 +87,7 @@ class conformermodel(nn.Module):
         self,
         xs: torch.Tensor,
         xs_len:torch.Tensor = torch.ones((0),dtype=torch.int)
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
       #  xs=self.cmvn(xs)
       #For training, mask_pad is required
         if(self.train_flag):
