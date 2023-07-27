@@ -1,5 +1,6 @@
 import math
-from typing import Tuple
+from typing import Tuple,Union,Optional
+import torch.nn.functional as F
 
 import torch
 from torch import nn
@@ -62,10 +63,9 @@ class MultiHeadedAttention(nn.Module):
         p_attn=attn
         x = torch.matmul(p_attn, value)  # (batch, head, time1, d_k)
         x = (x.transpose(1, 2).contiguous().view(n_batch,-1,
-                                                 self.h * self.d_k)
-             )  # (batch, 1,time1, d_model)
+                                                 self.h * self.d_k))  # (batch, 1,time1, d_model)
 
-        return self.linear_out(x)  # (batch, time1, d_model)
+        return self.linear_out(x) # (batch, time1, d_model)
 
     def forward(self, query: torch.Tensor, key: torch.Tensor,
                 value: torch.Tensor,mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool)
@@ -75,7 +75,7 @@ class MultiHeadedAttention(nn.Module):
 
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
         return self.forward_attention(v, scores,mask)
-   
+
 class GroupedMultiHeadedAttention(nn.Module):
     def __init__(self, n_head, n_feat, dropout_rate, group_size=3):
         """Construct a GroupedMultiHeadedAttention object."""
@@ -187,18 +187,58 @@ class GroupedMultiHeadedAttention(nn.Module):
         return self.forward_attention(v, scores, mask, padding_q)
 
 
+class PositionalEncoding(torch.nn.Module):
+    def __init__(self,
+                 d_model: int,
+                 dropout_rate: float,
+                 max_len: int = 5000):
+        """Construct an PositionalEncoding object."""
+        super().__init__()
+        self.d_model = d_model
+        self.xscale = math.sqrt(self.d_model)
+        self.dropout = torch.nn.Dropout(p=dropout_rate)
+        self.max_len = max_len
+
+        self.pe = torch.zeros(self.max_len, self.d_model)
+        position = torch.arange(0, self.max_len,
+                                dtype=torch.float32).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, self.d_model, 2, dtype=torch.float32) *
+            -(math.log(10000.0) / self.d_model))
+        self.pe[:, 0::2] = torch.sin(position * div_term)
+        self.pe[:, 1::2] = torch.cos(position * div_term)
+        self.pe = self.pe.unsqueeze(0)
+
+    def forward(self,
+                x: torch.Tensor) \
+            -> Tuple[torch.Tensor, torch.Tensor]:
+        """Add positional encoding.
+        Args:
+            x (torch.Tensor): Input. Its shape is (batch, time, ...)
+            offset (int, torch.tensor): position offset
+        Returns:
+            torch.Tensor: Encoded tensor. Its shape is (batch, time, ...)
+            torch.Tensor: for compatibility to RelPositionalEncoding
+        """
+
+        self.pe = self.pe.to(x.device)
+        pos_emb = self.position_encoding( x.size(1))
+        x = x * self.xscale + pos_emb
+        return self.dropout(x), self.dropout(pos_emb)
+
+    def position_encoding(self, size: int,
+                          apply_dropout: bool = True) -> torch.Tensor:
+    
+        assert  size < self.max_len
+        pos_emb = self.pe[:, : size]
+
+        if apply_dropout:
+            pos_emb = self.dropout(pos_emb)
+        return pos_emb    
+
+
 class PositionwiseFeedForward(torch.nn.Module):
-    """Positionwise feed forward layer.
-
-    FeedForward are appied on each position of the sequence.
-    The output dim is same with the input dim.
-
-    Args:
-        idim (int): Input dimenstion.
-        hidden_units (int): The number of hidden units.
-        dropout_rate (float): Dropout rate.
-        activation (torch.nn.Module): Activation function
-    """
+   
     def __init__(self,
                  idim: int,
                  hidden_units: int,
@@ -291,7 +331,7 @@ class ConvolutionModule(nn.Module):
         return x.transpose(1, 2),mask_pad
   
 class Conv2dSubsampling2(nn.Module):
-    def __init__(self, idim: int, odim: int, dropout_rate: float):
+    def __init__(self, idim: int, odim: int):
         super().__init__()
         self.conv=nn.Sequential(
             nn.Conv2d(1,odim,3,2),
@@ -313,15 +353,8 @@ class Conv2dSubsampling2(nn.Module):
 
 
 class Conv2dSubsampling4(nn.Module):
-    """Convolutional 2D subsampling (to 1/4 length).
-
-    Args:
-        idim (int): Input dimension.
-        odim (int): Output dimension.
-        dropout_rate (float): Dropout rate.
-
-    """
-    def __init__(self, idim: int, odim: int, dropout_rate: float):
+   
+    def __init__(self, idim: int, odim: int):
         """Construct an Conv2dSubsampling4 object."""
         super().__init__()
         self.conv = torch.nn.Sequential(
@@ -335,8 +368,9 @@ class Conv2dSubsampling4(nn.Module):
 
     def forward(
             self,
-            x: torch.Tensor
-    ) -> torch.Tensor:
+            x: torch.Tensor,
+            mask :torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         x = x.unsqueeze(1)  # (b, c=1, t, f)
         x = self.conv(x)
         b, c, t, f = x.size()
@@ -372,19 +406,8 @@ class GlobalCMVN(torch.nn.Module):
             x = x * self.istd
         return x
     
-    class TimeReductionLayer1D(nn.Module):
-    """
-    Squeezeformer Time Reduction procedure.
-    Downsamples the audio by `stride` in the time dimension.
-    Args:
-        channel (int): input dimension of
-                       MultiheadAttentionMechanism and PositionwiseFeedForward
-        out_dim (int): Output dimension of the module.
-        kernel_size (int): Conv kernel size for
-                           depthwise convolution in convolution module
-        stride (int): Downsampling factor in time dimension.
-    """
-
+class TimeReductionLayer1D(nn.Module):
+   
     def __init__(self, channel: int, out_dim: int,
                  kernel_size: int = 5, stride: int = 2):
         super(TimeReductionLayer1D, self).__init__()
@@ -407,8 +430,8 @@ class GlobalCMVN(torch.nn.Module):
             in_channels=channel, out_channels=out_dim,
             kernel_size=1, stride=1, padding=0, groups=1,
         )
-    def forward(self, xs :torch.Tensor, mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool)-> Tuple[torch.Tensor, torch.Tensor],
-                ):
+    def forward(self, xs :torch.Tensor, mask: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool))-> Tuple[torch.Tensor, torch.Tensor]:
+                
         xs = xs.transpose(1, 2)  # [B, C, T]
         if mask.size(2) > 0:  # time > 0
             xs.masked_fill_(~mask, 0.0)
@@ -438,3 +461,97 @@ class TimeRecoverlayer1D(nn.Module):
         out_mask=out_mask.transpose(1,2)
 
         return xs,out_mask
+
+
+class ConvolutionalSpatialGatingUnit(torch.nn.Module):
+    """Convolutional Spatial Gating Unit (CSGU)."""
+
+    def __init__(
+        self,
+        size: int,
+        kernel_size: int,
+        dropout_rate: float,
+
+    ):
+        super().__init__()
+
+        # split input channels
+        n_channels = size // 2
+        self.norm = nn.LayerNorm(n_channels)
+        assert (kernel_size - 1) % 2 == 0
+        padding = (kernel_size - 1) // 2
+        
+        self.conv = torch.nn.Conv1d(
+            n_channels,
+            n_channels,
+            kernel_size,
+            1,
+            padding,
+            groups=n_channels,
+        )
+
+        self.dropout = torch.nn.Dropout(dropout_rate)
+
+    def espnet_initialization_fn(self):
+        torch.nn.init.normal_(self.conv.weight, std=1e-6)
+        torch.nn.init.ones_(self.conv.bias)
+    
+    def forward(
+        self,
+        x: torch.Tensor,
+    ):
+        x_r, x_g = x.chunk(2, dim=-1)
+        
+        # exchange the temporal dimension and the feature dimension
+        x_g = self.norm(x_g)  # (N, T, D/2)
+        x_g = self.conv(x_g.transpose(1, 2)).transpose(1, 2)  # (N, T, D/2)
+       
+
+        out = x_r * x_g  # (N, T, D/2)
+        out = self.dropout(out)
+        return out
+
+
+class ConvolutionalGatingMLP(torch.nn.Module):
+    """Convolutional Gating MLP (cgMLP)."""
+
+    def __init__(
+        self,
+        size: int,
+        linear_units: int,
+        kernel_size: int,
+        dropout_rate: float,
+    ):
+        super().__init__()
+
+        self.channel_proj1 = torch.nn.Sequential(
+            torch.nn.Linear(size, linear_units), torch.nn.GELU()
+        )
+        self.csgu = ConvolutionalSpatialGatingUnit(
+            size=linear_units,
+            kernel_size=kernel_size,
+            dropout_rate=dropout_rate,
+    
+        )
+        self.channel_proj2 = torch.nn.Linear(linear_units // 2, size)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+    ) :
+        
+        xs_pad = x
+
+        # size -> linear_units
+        xs_pad = self.channel_proj1(xs_pad)
+
+        # linear_units -> linear_units/2
+        xs_pad= self.csgu(xs_pad)
+
+        # linear_units/2 -> size
+        xs_pad = self.channel_proj2(xs_pad)
+
+        out = xs_pad
+
+        return out
+
